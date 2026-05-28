@@ -1,10 +1,33 @@
-# Node modules (if using npm for wrangler)
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
 
-# Wrangler local dev files
+# Next.js build output
+.next/
+out/
+
+# Production build
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# Wrangler (legacy Cloudflare Worker files)
 .dev.vars
 .wrangler/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
