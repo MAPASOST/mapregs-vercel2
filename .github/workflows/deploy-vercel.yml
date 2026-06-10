@@ -19,11 +19,11 @@ jobs:
       - name: Check required secrets
         run: |
           if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
-            echo "::error::VERCEL_TOKEN secret is not set. Add it in repo Settings -> Secrets and variables -> Actions."
+            echo "::error::VERCEL_TOKEN secret is not set."
             exit 1
           fi
           if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
-            echo "::error::ANTHROPIC_API_KEY secret is not set. Add it in repo Settings -> Secrets and variables -> Actions."
+            echo "::error::ANTHROPIC_API_KEY secret is not set."
             exit 1
           fi
 
@@ -36,8 +36,25 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
 
-      - name: Link Vercel project (creates it on first run)
+      - name: Link Vercel project
         run: vercel link --yes --project mapregs --scope team_wh6uVRNQGEkQxohZXAbEYJvW --token "${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Disable deployment protection (make site publicly accessible)
+        run: |
+          PROJECT_ID=$(cat .vercel/project.json | python3 -c "import json,sys; print(json.load(sys.stdin)['projectId'])")
+          echo "Project ID: $PROJECT_ID"
+          curl -sf -X PATCH \
+            "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=team_wh6uVRNQGEkQxohZXAbEYJvW" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"ssoProtection": null, "passwordProtection": null}' | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          p=d.get('ssoProtection')
+          pp=d.get('passwordProtection')
+          print('ssoProtection:', p, '| passwordProtection:', pp)
+          print('Deployment protection disabled.' if p is None and pp is None else 'WARNING: protection still active')
+          "
 
       - name: Sync ANTHROPIC_API_KEY to Vercel
         run: |
@@ -60,6 +77,21 @@ jobs:
           {
             echo "### Vercel deployment"
             echo ""
-            echo "URL: $URL"
+            echo "**Live URL:** https://$URL"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Deployed: $URL"
+
+      - name: Verify site is publicly reachable
+        run: |
+          URL=$(cat "$GITHUB_OUTPUT" | grep '^url=' | cut -d= -f2 || true)
+          if [ -z "$URL" ]; then
+            echo "Could not read URL from output, skipping verification"
+            exit 0
+          fi
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://$URL")
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "Site is publicly reachable at https://$URL"
+          else
+            echo "::warning::Unexpected status $STATUS — protection may still be active"
+          fi
