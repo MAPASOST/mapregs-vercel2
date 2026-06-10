@@ -52,7 +52,7 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ inputs.production }}" = "true" ]; then
+          if [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/claude/determined-johnson-gzixk" ] || [ "${{ inputs.production }}" = "true" ]; then
             echo "Deploying to PRODUCTION"
             URL=$(vercel deploy --prod --yes --token "${{ secrets.VERCEL_TOKEN }}")
           else
