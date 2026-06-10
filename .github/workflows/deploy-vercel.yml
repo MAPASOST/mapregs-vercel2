@@ -1,0 +1,68 @@
+name: Deploy to Vercel
+
+on:
+  workflow_dispatch:
+    inputs:
+      production:
+        description: 'Deploy to production'
+        type: boolean
+        default: true
+  push:
+    branches:
+      - main
+      - 'claude/**'
+
+env:
+  VERCEL_ORG_ID: team_wh6uVRNQGEkQxohZXAbEYJvW
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "::error::VERCEL_TOKEN secret is not set. Add it in repo Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set. Add it in repo Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Link Vercel project (creates it on first run)
+        run: vercel link --yes --project mapregs --token "${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Sync ANTHROPIC_API_KEY to Vercel
+        run: |
+          for target in production preview; do
+            vercel env rm ANTHROPIC_API_KEY "$target" --yes --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true
+            printf '%s' "${{ secrets.ANTHROPIC_API_KEY }}" | vercel env add ANTHROPIC_API_KEY "$target" --token "${{ secrets.VERCEL_TOKEN }}"
+          done
+
+      - name: Deploy
+        id: deploy
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ inputs.production }}" = "true" ]; then
+            echo "Deploying to PRODUCTION"
+            URL=$(vercel deploy --prod --yes --token "${{ secrets.VERCEL_TOKEN }}")
+          else
+            echo "Deploying PREVIEW"
+            URL=$(vercel deploy --yes --token "${{ secrets.VERCEL_TOKEN }}")
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Vercel deployment"
+            echo ""
+            echo "URL: $URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed: $URL"
