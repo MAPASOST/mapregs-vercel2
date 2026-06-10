@@ -12,9 +12,6 @@ on:
       - main
       - 'claude/**'
 
-env:
-  VERCEL_ORG_ID: team_wh6uVRNQGEkQxohZXAbEYJvW
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -40,7 +37,7 @@ jobs:
         run: npm install -g vercel
 
       - name: Link Vercel project (creates it on first run)
-        run: vercel link --yes --project mapregs --token "${{ secrets.VERCEL_TOKEN }}"
+        run: vercel link --yes --project mapregs --scope team_wh6uVRNQGEkQxohZXAbEYJvW --token "${{ secrets.VERCEL_TOKEN }}"
 
       - name: Sync ANTHROPIC_API_KEY to Vercel
         run: |
