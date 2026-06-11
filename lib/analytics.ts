@@ -42,7 +42,7 @@ export async function logQuestion(question: string): Promise<void> {
     const encoded = Buffer.from(text).toString('base64url')
     const rand = Math.random().toString(36).slice(2, 6)
     await put(`${PREFIX}${Date.now()}.${rand}.${encoded}.txt`, text, {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
       contentType: 'text/plain',
     })

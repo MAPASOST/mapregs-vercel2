@@ -76,7 +76,7 @@ jobs:
           fi
 
           echo "Creating Blob store..."
-          vercel blob create-store mapregs-analytics --token "$TOKEN" 2>&1 | head -5 || true
+          vercel blob create-store mapregs-analytics --access private --token "$TOKEN" 2>&1 | head -5 || true
 
           # Find the store ID via the REST API (IDs are not secret; tokens are never printed)
           CODE=$(curl -s -o /tmp/stores.json -w '%{http_code}' \
