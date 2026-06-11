@@ -65,18 +65,51 @@ jobs:
 
       - name: Provision Blob analytics store
         run: |
-          ENVS=$(vercel env ls production --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true)
+          TEAM=team_wh6uVRNQGEkQxohZXAbEYJvW
+          TOKEN="${{ secrets.VERCEL_TOKEN }}"
+          PROJECT_ID=$(jq -r .projectId .vercel/project.json)
+
+          ENVS=$(vercel env ls production --token "$TOKEN" 2>/dev/null || true)
           if echo "$ENVS" | grep -q "BLOB_READ_WRITE_TOKEN"; then
             echo "Blob store already connected."
-          else
-            echo "Creating Blob store for question analytics..."
-            vercel blob store add mapregs-analytics --token "${{ secrets.VERCEL_TOKEN }}" || true
-            ENVS=$(vercel env ls production --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true)
-            if echo "$ENVS" | grep -q "BLOB_READ_WRITE_TOKEN"; then
-              echo "Blob store created and connected."
-            else
-              echo "::warning::Could not auto-connect a Blob store. Create one in the Vercel dashboard: mapregs project -> Storage -> Create Database -> Blob."
+            exit 0
+          fi
+
+          echo "Creating Blob store..."
+          vercel blob create-store mapregs-analytics --token "$TOKEN" 2>&1 | head -5 || true
+
+          # Find the store ID via the REST API (IDs are not secret; tokens are never printed)
+          CODE=$(curl -s -o /tmp/stores.json -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://api.vercel.com/v1/storage/stores?teamId=$TEAM")
+          echo "List stores: HTTP $CODE"
+          jq -r '.error.message? // empty' /tmp/stores.json
+          STORE_ID=$(jq -r '.stores[]? | select(.name=="mapregs-analytics") | .id' /tmp/stores.json | head -1)
+          echo "Store ID: ${STORE_ID:-<not found>}"
+          if [ -z "$STORE_ID" ]; then
+            echo "Response JSON keys (for debugging):"
+            jq -r 'paths(scalars) as $p | $p | join(".")' /tmp/stores.json 2>/dev/null | sort -u | head -30
+          fi
+
+          # Connect the store to the project (injects BLOB_READ_WRITE_TOKEN env var)
+          if [ -n "$STORE_ID" ]; then
+            CODE=$(curl -s -o /tmp/conn.json -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+              -d "{\"projectId\":\"$PROJECT_ID\",\"envVarEnvironments\":[\"production\",\"preview\",\"development\"]}" \
+              "https://api.vercel.com/v1/storage/stores/$STORE_ID/connections?teamId=$TEAM")
+            echo "Connect store: HTTP $CODE"
+            jq -r '.error.message? // empty' /tmp/conn.json
+            if [ "$CODE" != "200" ] && [ "$CODE" != "201" ]; then
+              echo "Response JSON keys (for debugging):"
+              jq -r 'paths(scalars) as $p | $p | join(".")' /tmp/conn.json 2>/dev/null | sort -u | head -30
             fi
+          fi
+
+          ENVS=$(vercel env ls production --token "$TOKEN" 2>/dev/null || true)
+          if echo "$ENVS" | grep -q "BLOB_READ_WRITE_TOKEN"; then
+            echo "Blob store connected successfully."
+          else
+            echo "::warning::Could not auto-connect a Blob store. Create one in the Vercel dashboard: mapregs project -> Storage -> Create Database -> Blob."
           fi
 
       - name: Ensure ADMIN_KEY for /admin dashboard
@@ -120,8 +153,10 @@ jobs:
           echo "Deployed: $URL"
 
       - name: Verify site is publicly reachable
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
         run: |
-          URL=$(cat "$GITHUB_OUTPUT" | grep '^url=' | cut -d= -f2 || true)
+          URL=$(echo "$DEPLOY_URL" | sed 's|^https://||')
           if [ -z "$URL" ]; then
             echo "Could not read URL from output, skipping verification"
             exit 0
