@@ -1,9 +1,12 @@
-import { kv } from './kv'
+import { put, list } from '@vercel/blob'
 
-const COUNTS_KEY = 'analytics:question-counts'
-const RECENT_KEY = 'analytics:recent-questions'
-const TOTAL_KEY = 'analytics:total-questions'
-const RECENT_LIMIT = 500
+// Each question is stored as its own tiny blob; the question text and
+// timestamp are encoded in the pathname so stats can be computed from a
+// single list() scan with no per-blob fetches and no write races.
+//
+// Pathname format: q/<timestamp>.<rand>.<base64url(question)>.txt
+const PREFIX = 'q/'
+const SCAN_CAP = 5000
 
 export interface RecentQuestion {
   question: string
@@ -15,58 +18,88 @@ export interface TopQuestion {
   count: number
 }
 
+export interface QuestionStats {
+  top: TopQuestion[]
+  recent: RecentQuestion[]
+  total: number
+  capped: boolean
+}
+
 // Collapse near-duplicate phrasings so counts aggregate sensibly
 export function normalizeQuestion(q: string): string {
-  return q.trim().toLowerCase().replace(/\s+/g, ' ').replace(/[?!.]+$/, '').slice(0, 200)
+  return q.trim().toLowerCase().replace(/\s+/g, ' ').replace(/[?!.]+$/, '')
+}
+
+export function isAnalyticsConfigured(): boolean {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN)
 }
 
 export async function logQuestion(question: string): Promise<void> {
-  if (!kv) return
+  if (!isAnalyticsConfigured()) return
   try {
-    const entry: RecentQuestion = { question: question.trim().slice(0, 500), ts: Date.now() }
-    await Promise.all([
-      kv.zincrby(COUNTS_KEY, 1, normalizeQuestion(question)),
-      kv.lpush(RECENT_KEY, JSON.stringify(entry)),
-      kv.incr(TOTAL_KEY),
-    ])
-    await kv.ltrim(RECENT_KEY, 0, RECENT_LIMIT - 1)
+    const text = question.trim().slice(0, 300)
+    if (!text) return
+    const encoded = Buffer.from(text).toString('base64url')
+    const rand = Math.random().toString(36).slice(2, 6)
+    await put(`${PREFIX}${Date.now()}.${rand}.${encoded}.txt`, text, {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: 'text/plain',
+    })
   } catch (err) {
     console.error('analytics: failed to log question', err)
   }
 }
 
-export async function getTopQuestions(limit = 50): Promise<TopQuestion[]> {
-  if (!kv) return []
-  const flat = await kv.zrange<(string | number)[]>(COUNTS_KEY, 0, limit - 1, {
-    rev: true,
-    withScores: true,
-  })
-  const top: TopQuestion[] = []
-  for (let i = 0; i < flat.length; i += 2) {
-    top.push({ question: String(flat[i]), count: Number(flat[i + 1]) })
+function parsePathname(pathname: string): RecentQuestion | null {
+  if (!pathname.startsWith(PREFIX) || !pathname.endsWith('.txt')) return null
+  const parts = pathname.slice(PREFIX.length, -4).split('.')
+  if (parts.length !== 3) return null
+  const ts = Number(parts[0])
+  if (!Number.isFinite(ts)) return null
+  try {
+    const question = Buffer.from(parts[2], 'base64url').toString('utf8')
+    return question ? { question, ts } : null
+  } catch {
+    return null
   }
-  return top
 }
 
-export async function getRecentQuestions(limit = 100): Promise<RecentQuestion[]> {
-  if (!kv) return []
-  const raw = await kv.lrange<string | RecentQuestion>(RECENT_KEY, 0, limit - 1)
-  return raw
-    .map((item) => {
-      try {
-        return typeof item === 'string' ? (JSON.parse(item) as RecentQuestion) : item
-      } catch {
-        return null
-      }
-    })
-    .filter((x): x is RecentQuestion => x !== null && typeof x.question === 'string')
-}
+export async function getQuestionStats(topLimit = 50, recentLimit = 100): Promise<QuestionStats> {
+  if (!isAnalyticsConfigured()) {
+    return { top: [], recent: [], total: 0, capped: false }
+  }
 
-export async function getTotalQuestionCount(): Promise<number> {
-  if (!kv) return 0
-  return (await kv.get<number>(TOTAL_KEY)) ?? 0
-}
+  const entries: RecentQuestion[] = []
+  let cursor: string | undefined
+  let capped = false
 
-export function isAnalyticsConfigured(): boolean {
-  return kv !== null
+  do {
+    const res = await list({ prefix: PREFIX, limit: 1000, cursor })
+    for (const blob of res.blobs) {
+      const entry = parsePathname(blob.pathname)
+      if (entry) entries.push(entry)
+    }
+    cursor = res.cursor
+    if (entries.length >= SCAN_CAP) {
+      capped = Boolean(cursor)
+      break
+    }
+  } while (cursor)
+
+  const counts = new Map<string, TopQuestion>()
+  for (const entry of entries) {
+    const norm = normalizeQuestion(entry.question)
+    const existing = counts.get(norm)
+    if (existing) {
+      existing.count += 1
+    } else {
+      counts.set(norm, { question: entry.question, count: 1 })
+    }
+  }
+
+  const top = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, topLimit)
+  const recent = [...entries].sort((a, b) => b.ts - a.ts).slice(0, recentLimit)
+
+  return { top, recent, total: entries.length, capped }
 }

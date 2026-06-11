@@ -63,16 +63,43 @@ jobs:
             printf '%s' "${{ secrets.ANTHROPIC_API_KEY }}" | vercel env add ANTHROPIC_API_KEY "$target" --token "${{ secrets.VERCEL_TOKEN }}"
           done
 
-      - name: Sync ADMIN_KEY to Vercel (optional, for /admin dashboard)
+      - name: Provision Blob analytics store
         run: |
-          if [ -z "${{ secrets.ADMIN_KEY }}" ]; then
-            echo "ADMIN_KEY secret not set — skipping (the /admin page will show setup instructions)"
+          ENVS=$(vercel env ls production --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true)
+          if echo "$ENVS" | grep -q "BLOB_READ_WRITE_TOKEN"; then
+            echo "Blob store already connected."
+          else
+            echo "Creating Blob store for question analytics..."
+            vercel blob store add mapregs-analytics --token "${{ secrets.VERCEL_TOKEN }}" || true
+            ENVS=$(vercel env ls production --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true)
+            if echo "$ENVS" | grep -q "BLOB_READ_WRITE_TOKEN"; then
+              echo "Blob store created and connected."
+            else
+              echo "::warning::Could not auto-connect a Blob store. Create one in the Vercel dashboard: mapregs project -> Storage -> Create Database -> Blob."
+            fi
+          fi
+
+      - name: Ensure ADMIN_KEY for /admin dashboard
+        run: |
+          if [ -n "${{ secrets.ADMIN_KEY }}" ]; then
+            echo "Using ADMIN_KEY from GitHub secret."
+            for target in production preview; do
+              vercel env rm ADMIN_KEY "$target" --yes --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true
+              printf '%s' "${{ secrets.ADMIN_KEY }}" | vercel env add ADMIN_KEY "$target" --token "${{ secrets.VERCEL_TOKEN }}"
+            done
             exit 0
           fi
+          ENVS=$(vercel env ls production --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true)
+          if echo "$ENVS" | grep -q "ADMIN_KEY"; then
+            echo "ADMIN_KEY already set on the project."
+            exit 0
+          fi
+          KEY=$(openssl rand -hex 12)
+          echo "::add-mask::$KEY"
           for target in production preview; do
-            vercel env rm ADMIN_KEY "$target" --yes --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true
-            printf '%s' "${{ secrets.ADMIN_KEY }}" | vercel env add ADMIN_KEY "$target" --token "${{ secrets.VERCEL_TOKEN }}"
+            printf '%s' "$KEY" | vercel env add ADMIN_KEY "$target" --token "${{ secrets.VERCEL_TOKEN }}"
           done
+          echo "Generated a new ADMIN_KEY. View it in the Vercel dashboard: mapregs project -> Settings -> Environment Variables -> ADMIN_KEY (click the eye icon to reveal)."
 
       - name: Deploy
         id: deploy

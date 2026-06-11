@@ -1,9 +1,4 @@
-import {
-  getTopQuestions,
-  getRecentQuestions,
-  getTotalQuestionCount,
-  isAnalyticsConfigured,
-} from '@/lib/analytics'
+import { getQuestionStats, isAnalyticsConfigured } from '@/lib/analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,10 +32,10 @@ export default async function AdminPage({
     return (
       <Shell>
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 text-amber-900 text-sm">
-          <strong>Setup required:</strong> set an <code className="bg-amber-100 px-1 rounded">ADMIN_KEY</code> environment
-          variable on the Vercel project (or as a GitHub <code className="bg-amber-100 px-1 rounded">ADMIN_KEY</code> secret,
-          which the deploy workflow syncs automatically), then visit{' '}
-          <code className="bg-amber-100 px-1 rounded">/admin?key=YOUR_KEY</code>.
+          <strong>Setup required:</strong> the <code className="bg-amber-100 px-1 rounded">ADMIN_KEY</code>{' '}
+          environment variable is not set on this deployment. It is normally created automatically by
+          the deploy workflow — re-run the deploy, or add it manually in the Vercel dashboard under
+          Settings → Environment Variables.
         </div>
       </Shell>
     )
@@ -50,7 +45,9 @@ export default async function AdminPage({
     return (
       <Shell>
         <div className="bg-red-50 border border-red-300 rounded-xl p-5 text-red-800 text-sm">
-          Unauthorized. Append <code className="bg-red-100 px-1 rounded">?key=YOUR_ADMIN_KEY</code> to the URL.
+          Unauthorized. Append <code className="bg-red-100 px-1 rounded">?key=YOUR_ADMIN_KEY</code> to
+          the URL. The key is in the Vercel dashboard under the mapregs project → Settings →
+          Environment Variables → ADMIN_KEY.
         </div>
       </Shell>
     )
@@ -60,26 +57,25 @@ export default async function AdminPage({
     return (
       <Shell>
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 text-amber-900 text-sm">
-          <strong>No KV store attached.</strong> Question tracking needs a Redis store: in the Vercel
-          dashboard go to the <strong>mapregs</strong> project → <strong>Storage</strong> →{' '}
-          <strong>Create Database → Upstash for Redis</strong> (free tier is fine). Once attached and
-          redeployed, questions will be recorded here automatically.
+          <strong>No Blob store attached.</strong> Question tracking needs Vercel Blob storage. It is
+          normally created automatically by the deploy workflow — re-run the deploy, or create one in
+          the Vercel dashboard: <strong>mapregs</strong> project → <strong>Storage</strong> →{' '}
+          <strong>Create Database → Blob</strong>, then redeploy.
         </div>
       </Shell>
     )
   }
 
-  const [top, recent, total] = await Promise.all([
-    getTopQuestions(50),
-    getRecentQuestions(100),
-    getTotalQuestionCount(),
-  ])
+  const { top, recent, total, capped } = await getQuestionStats(50, 100)
 
   return (
     <Shell>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-          <div className="text-3xl font-bold text-blue-600">{total.toLocaleString()}</div>
+          <div className="text-3xl font-bold text-blue-600">
+            {total.toLocaleString()}
+            {capped ? '+' : ''}
+          </div>
           <div className="text-sm text-slate-500 mt-1">Total questions asked</div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
@@ -88,14 +84,16 @@ export default async function AdminPage({
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <div className="text-3xl font-bold text-emerald-600">{recent.length.toLocaleString()}</div>
-          <div className="text-sm text-slate-500 mt-1">Recent questions shown (last 500 kept)</div>
+          <div className="text-sm text-slate-500 mt-1">Recent questions shown</div>
         </div>
       </div>
 
       <section className="mb-10">
         <h2 className="text-lg font-semibold text-slate-800 mb-3">Most common questions</h2>
         {top.length === 0 ? (
-          <p className="text-slate-500 text-sm">No questions recorded yet.</p>
+          <p className="text-slate-500 text-sm">
+            No questions recorded yet — they will appear here as soon as someone uses the chatbot.
+          </p>
         ) : (
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             <table className="w-full text-sm">
@@ -108,7 +106,7 @@ export default async function AdminPage({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {top.map((q, i) => (
-                  <tr key={q.question} className="hover:bg-slate-50">
+                  <tr key={`${q.question}-${i}`} className="hover:bg-slate-50">
                     <td className="px-4 py-2 text-slate-400">{i + 1}</td>
                     <td className="px-4 py-2 text-slate-800">{q.question}</td>
                     <td className="px-4 py-2 text-right font-semibold text-blue-600">{q.count}</td>

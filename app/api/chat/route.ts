@@ -36,19 +36,8 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Track what people are asking (no-op until a KV store is attached)
+    // Track what people are asking (no-op until a Blob store is attached)
     await logQuestion(latestUserMessage.content)
-
-    // Retrieve conversation history from KV if sessionId is provided
-    let history: Message[] = []
-    if (sessionId && kv) {
-      try {
-        const stored = await kv.get<Message[]>(`session:${sessionId}`)
-        if (stored) history = stored
-      } catch {
-        // KV unavailable — proceed without history
-      }
-    }
 
     // Get relevant document context for the latest question
     const documentContext = documents.getRelevantDocumentContent(latestUserMessage.content)
@@ -62,11 +51,8 @@ ${documentContext}
 
 Now answer the user's question based ONLY on the information in these documents. Include specific citations (document name, section, page) for all information you provide.`
 
-    // Combine stored history with new messages for the API call
-    const allMessages: Message[] = [
-      ...history,
-      ...messages,
-    ]
+    // The client sends the full conversation on every request
+    const allMessages: Message[] = messages
 
     const result = streamText({
       model: anthropic(CLAUDE_MODEL),
@@ -74,7 +60,7 @@ Now answer the user's question based ONLY on the information in these documents.
       messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
       maxTokens: MAX_TOKENS,
       onFinish: async ({ text }) => {
-        // Persist updated conversation to KV
+        // Archive the conversation transcript when a KV store is attached
         if (sessionId && kv) {
           const updatedHistory: Message[] = [
             ...allMessages,
