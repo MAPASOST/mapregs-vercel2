@@ -63,6 +63,17 @@ jobs:
             printf '%s' "${{ secrets.ANTHROPIC_API_KEY }}" | vercel env add ANTHROPIC_API_KEY "$target" --token "${{ secrets.VERCEL_TOKEN }}"
           done
 
+      - name: Sync ADMIN_KEY to Vercel (optional, for /admin dashboard)
+        run: |
+          if [ -z "${{ secrets.ADMIN_KEY }}" ]; then
+            echo "ADMIN_KEY secret not set — skipping (the /admin page will show setup instructions)"
+            exit 0
+          fi
+          for target in production preview; do
+            vercel env rm ADMIN_KEY "$target" --yes --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true
+            printf '%s' "${{ secrets.ADMIN_KEY }}" | vercel env add ADMIN_KEY "$target" --token "${{ secrets.VERCEL_TOKEN }}"
+          done
+
       - name: Deploy
         id: deploy
         run: |

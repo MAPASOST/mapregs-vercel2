@@ -1,6 +1,7 @@
 import { streamText } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/kv'
+import { logQuestion } from '@/lib/analytics'
 import { documents } from '@/lib/documents'
 import { CLAUDE_MODEL, MAX_TOKENS, SYSTEM_PROMPT, SESSION_TTL } from '@/lib/constants'
 import type { NextRequest } from 'next/server'
@@ -35,14 +36,17 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Track what people are asking (no-op until a KV store is attached)
+    await logQuestion(latestUserMessage.content)
+
     // Retrieve conversation history from KV if sessionId is provided
     let history: Message[] = []
-    if (sessionId) {
+    if (sessionId && kv) {
       try {
         const stored = await kv.get<Message[]>(`session:${sessionId}`)
         if (stored) history = stored
       } catch {
-        // KV unavailable in dev — proceed without history
+        // KV unavailable — proceed without history
       }
     }
 
@@ -71,7 +75,7 @@ Now answer the user's question based ONLY on the information in these documents.
       maxTokens: MAX_TOKENS,
       onFinish: async ({ text }) => {
         // Persist updated conversation to KV
-        if (sessionId) {
+        if (sessionId && kv) {
           const updatedHistory: Message[] = [
             ...allMessages,
             { role: 'assistant', content: text },

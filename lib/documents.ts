@@ -4581,25 +4581,36 @@ ${doc.content}
                 '7.04': ['administration', 'policies', 'procedure', 'record', 'file'],
                 '7.08': ['family', 'parent', 'involvement', 'communication']
             },
-            // 606 CMR 10 sections
+            // 606 CMR 10 sections (Child Care Financial Assistance)
             'ma-606-cmr-10': {
-                '10.03': ['background check', 'brc', 'criminal history', 'fingerprint', 'record check'],
-                '10.04': ['suitability', 'determination', 'disqualifying', 'offense'],
-                '10.05': ['appeal', 'hearing', 'waiver'],
-                '10.06': ['renewal', 'update', 'ongoing']
+                '10.03': ['financial assistance', 'subsidy', 'authorization period', 'reauthorization', 'provisional authorization'],
+                '10.04': ['income eligible', 'income eligibility', 'parent fee', 'family fee', 'copayment', 'co-payment', 'state median income', 'smi', 'service need'],
+                '10.05': ['dta', 'transitional assistance'],
+                '10.06': ['dcf', 'children and families'],
+                '10.07': ['young parent'],
+                '10.08': ['informal child care', 'informal provider'],
+                '10.09': ['reimbursement', 'voucher'],
+                '10.10': ['termination of services', 'termination of financial', 'denial'],
+                '10.12': ['intentional program violation']
             },
-            // 606 CMR 14 sections
+            // 606 CMR 14 sections (Background Record Checks)
             'ma-606-cmr-14': {
-                '14.03': ['financial assistance', 'subsidy', 'eligible', 'eligibility', 'income'],
-                '14.04': ['voucher', 'payment', 'reimbursement'],
-                '14.05': ['fee', 'copayment', 'co-payment', 'parent fee', 'family fee'],
-                '14.06': ['state median income', 'smi', 'income level']
+                '14.05': ['candidate categor'],
+                '14.07': ['submitting background', 'cori', 'sori', 'fingerprint'],
+                '14.09': ['background record check renewal', 'frequency of background'],
+                '14.10': ['background check', 'brc', 'criminal history', 'record check', 'disqualification', 'mandatory disqualification', 'presumptive', 'discretionary', 'disqualifying offense'],
+                '14.12': ['suitability', 'review process for candidates'],
+                '14.13': ['provisional status', 'conditional hiring'],
+                '14.14': ['not suitable', 'suitability determination'],
+                '14.15': ['program responsibilit']
             },
-            // 102 CMR 1 sections
+            // 102 CMR 1 sections (Enforcement Standards)
             'ma-102-cmr-1': {
-                '1.02': ['reporting', 'report', 'data', 'information'],
-                '1.03': ['attendance', 'enrollment', 'child information'],
-                '1.04': ['provider', 'submission', 'deadline']
+                '1.05': ['disqualifying background information'],
+                '1.06': ['right to visit'],
+                '1.07': ['enforcement', 'sanction', 'fine', 'suspension', 'revocation', 'probation', 'deficiency correction', 'non-compliance', 'noncompliance'],
+                '1.08': ['appeal', 'hearing'],
+                '1.09': ['notification']
             }
         };
 
