@@ -12,6 +12,13 @@ export interface Citation {
   text: string;
 }
 
+export interface DocumentSection {
+  number: string;
+  title: string;
+  content: string;
+  fullName: string;
+}
+
 // Document Management System
 // This file contains the regulation documents and sample questions
 
@@ -4506,6 +4513,19 @@ ${doc.content}
         }).join('\n\n');
     },
 
+    // Section splits are deterministic for our static documents — cache them
+    // so repeated keyword matches don't re-parse ~100KB of text per request.
+    _sectionCache: new Map<string, DocumentSection[]>(),
+
+    splitDocumentIntoSectionsCached(doc: Document) {
+        let cached = this._sectionCache.get(doc.id);
+        if (!cached) {
+            cached = this.splitDocumentIntoSections(doc);
+            this._sectionCache.set(doc.id, cached);
+        }
+        return cached;
+    },
+
     // Split document into sections for ultra-precise filtering
     splitDocumentIntoSections(doc: Document) {
         const sections = [];
@@ -4614,33 +4634,24 @@ ${doc.content}
             }
         };
 
-        // First, identify which documents are relevant
-        const relevantDocIds = new Set();
-
-        // Check for explicit regulation references (e.g., "606 CMR 7", "CMR 10.03")
-        if (questionLower.includes('606 cmr 7') || questionLower.includes('cmr 7.')) {
-            relevantDocIds.add('ma-606-cmr-7');
-        }
-        if (questionLower.includes('606 cmr 10') || questionLower.includes('cmr 10.')) {
-            relevantDocIds.add('ma-606-cmr-10');
-        }
-        if (questionLower.includes('606 cmr 14') || questionLower.includes('cmr 14.')) {
-            relevantDocIds.add('ma-606-cmr-14');
-        }
-        if (questionLower.includes('102 cmr 1') || questionLower.includes('cmr 1.')) {
-            relevantDocIds.add('ma-102-cmr-1');
-        }
+        // Documents the user explicitly cited (e.g. "606 CMR 14", "CMR 7.10").
+        // These are always sent IN FULL — an explicit citation outranks any
+        // keyword-derived section filtering.
+        const explicitDocIds = new Set<string>();
+        if (/\b(?:606\s*)?cmr\s*7\b/.test(questionLower)) explicitDocIds.add('ma-606-cmr-7');
+        if (/\b(?:606\s*)?cmr\s*10\b/.test(questionLower)) explicitDocIds.add('ma-606-cmr-10');
+        if (/\b(?:606\s*)?cmr\s*14\b/.test(questionLower)) explicitDocIds.add('ma-606-cmr-14');
+        if (/\b(?:102\s*)?cmr\s*1\b/.test(questionLower)) explicitDocIds.add('ma-102-cmr-1');
 
         // Check for keyword matches and find specific sections
         for (const [docId, sections] of Object.entries(sectionKeywords)) {
+            if (explicitDocIds.has(docId)) continue; // already included in full
             for (const [sectionNum, keywords] of Object.entries(sections)) {
                 const hasMatch = keywords.some(keyword => questionLower.includes(keyword));
                 if (hasMatch) {
-                    relevantDocIds.add(docId);
-
                     const doc = this.documents.find(d => d.id === docId);
                     if (doc) {
-                        const allSections = this.splitDocumentIntoSections(doc);
+                        const allSections = this.splitDocumentIntoSectionsCached(doc);
                         const matchingSection = allSections.find(s => s.number === sectionNum);
                         if (matchingSection) {
                             relevantSections.push({
@@ -4653,40 +4664,38 @@ ${doc.content}
             }
         }
 
-        // If we found specific sections, return only those
-        if (relevantSections.length > 0) {
-            console.log(`Ultra-precise filtering: Sending ${relevantSections.length} specific sections instead of full documents`);
-            return relevantSections.map(({ doc, section }) => {
-                return `=== DOCUMENT: ${doc.name} ===
-=== SECTION: ${section.fullName} ===
-
-${section.content}
-
-=== END OF SECTION ===`;
-            }).join('\n\n');
+        // Nothing matched at all: send every document rather than guessing.
+        // This mirrors the original site's complete-coverage behavior and only
+        // costs extra tokens on questions the keyword map can't classify.
+        if (explicitDocIds.size === 0 && relevantSections.length === 0) {
+            console.log('No filter match — sending all documents for complete coverage');
+            return this.getAllDocumentContent();
         }
 
-        // Fallback: If no specific sections matched, send the most relevant 1-2 documents
-        // (This is the previous behavior as a safety net)
-        console.log('Using document-level filtering (no specific sections matched)');
+        const parts: string[] = [];
 
-        if (relevantDocIds.size === 0) {
-            // Default to most commonly used document
-            relevantDocIds.add('ma-606-cmr-7');
-        }
-
-        const relevantDocs = Array.from(relevantDocIds).map(id =>
-            this.documents.find(d => d.id === id)
-        ).filter((d): d is Document => Boolean(d));
-
-        return relevantDocs.map(doc => {
-            return `=== DOCUMENT: ${doc.name} ===
+        for (const id of explicitDocIds) {
+            const doc = this.documents.find(d => d.id === id);
+            if (!doc) continue;
+            parts.push(`=== DOCUMENT: ${doc.name} ===
 Description: ${doc.description}
 
 ${doc.content}
 
-=== END OF DOCUMENT: ${doc.name} ===`;
-        }).join('\n\n');
+=== END OF DOCUMENT: ${doc.name} ===`);
+        }
+
+        for (const { doc, section } of relevantSections) {
+            parts.push(`=== DOCUMENT: ${doc.name} ===
+=== SECTION: ${section.fullName} ===
+
+${section.content}
+
+=== END OF SECTION ===`);
+        }
+
+        console.log(`Filtering: ${explicitDocIds.size} full documents, ${relevantSections.length} sections`);
+        return parts.join('\n\n');
     },
 
     // Get a random subset of sample questions

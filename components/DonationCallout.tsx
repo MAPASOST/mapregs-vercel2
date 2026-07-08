@@ -1,3 +1,5 @@
+import { DONATE_URL } from '@/lib/constants'
+
 export default function DonationCallout() {
   return (
     <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -9,7 +11,7 @@ export default function DonationCallout() {
         </p>
       </div>
       <a
-        href="https://www.massafterschool.org/checkout/donate?donatePageId=659eb35dc09ff6158cd6caed"
+        href={DONATE_URL}
         target="_blank"
         rel="noopener noreferrer"
         className="shrink-0 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"

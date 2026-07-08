@@ -12,6 +12,9 @@ on:
       - main
       - 'claude/**'
 
+env:
+  VERCEL_TEAM: team_wh6uVRNQGEkQxohZXAbEYJvW
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -37,14 +40,14 @@ jobs:
         run: npm install -g vercel
 
       - name: Link Vercel project
-        run: vercel link --yes --project mapregs --scope team_wh6uVRNQGEkQxohZXAbEYJvW --token "${{ secrets.VERCEL_TOKEN }}"
+        run: vercel link --yes --project mapregs --scope "$VERCEL_TEAM" --token "${{ secrets.VERCEL_TOKEN }}"
 
       - name: Disable deployment protection (make site publicly accessible)
         run: |
           PROJECT_ID=$(cat .vercel/project.json | python3 -c "import json,sys; print(json.load(sys.stdin)['projectId'])")
           echo "Project ID: $PROJECT_ID"
           curl -sf -X PATCH \
-            "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=team_wh6uVRNQGEkQxohZXAbEYJvW" \
+            "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$VERCEL_TEAM" \
             -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"ssoProtection": null, "passwordProtection": null}' | python3 -c "
@@ -58,14 +61,15 @@ jobs:
 
       - name: Sync ANTHROPIC_API_KEY to Vercel
         run: |
+          # --force upserts atomically; the old rm-then-add left a window
+          # where a failed add stranded production with no API key at all
           for target in production preview; do
-            vercel env rm ANTHROPIC_API_KEY "$target" --yes --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true
-            printf '%s' "${{ secrets.ANTHROPIC_API_KEY }}" | vercel env add ANTHROPIC_API_KEY "$target" --token "${{ secrets.VERCEL_TOKEN }}"
+            printf '%s' "${{ secrets.ANTHROPIC_API_KEY }}" | vercel env add ANTHROPIC_API_KEY "$target" --force --token "${{ secrets.VERCEL_TOKEN }}"
           done
 
       - name: Provision Blob analytics store
         run: |
-          TEAM=team_wh6uVRNQGEkQxohZXAbEYJvW
+          TEAM="$VERCEL_TEAM"
           TOKEN="${{ secrets.VERCEL_TOKEN }}"
           PROJECT_ID=$(jq -r .projectId .vercel/project.json)
 
@@ -115,10 +119,9 @@ jobs:
       - name: Ensure ADMIN_KEY for /admin dashboard
         run: |
           if [ -n "${{ secrets.ADMIN_KEY }}" ]; then
-            echo "Using ADMIN_KEY from GitHub secret."
+            echo "Using ADMIN_KEY from GitHub secret (overrides any generated key)."
             for target in production preview; do
-              vercel env rm ADMIN_KEY "$target" --yes --token "${{ secrets.VERCEL_TOKEN }}" 2>/dev/null || true
-              printf '%s' "${{ secrets.ADMIN_KEY }}" | vercel env add ADMIN_KEY "$target" --token "${{ secrets.VERCEL_TOKEN }}"
+              printf '%s' "${{ secrets.ADMIN_KEY }}" | vercel env add ADMIN_KEY "$target" --force --token "${{ secrets.VERCEL_TOKEN }}"
             done
             exit 0
           fi
@@ -137,6 +140,8 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
+          # TODO: once this branch is merged to main, remove the hardcoded
+          # branch name so only main deploys to production
           if [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/claude/determined-johnson-gzixk" ] || [ "${{ inputs.production }}" = "true" ]; then
             echo "Deploying to PRODUCTION"
             URL=$(vercel deploy --prod --yes --token "${{ secrets.VERCEL_TOKEN }}")

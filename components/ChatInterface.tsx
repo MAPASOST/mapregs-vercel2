@@ -2,23 +2,24 @@
 
 import { useChat } from 'ai/react'
 import { useRef, useEffect, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 import Message from './Message'
 import LoadingIndicator from './LoadingIndicator'
 import Sidebar from './Sidebar'
+import { COOLDOWN_SECONDS } from '@/lib/constants'
 
 export default function ChatInterface() {
-  const [sessionId] = useState(() => uuidv4())
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  // Whether the view should stay glued to the newest message. Scrolling up
+  // releases the pin so streaming updates never yank the user back down.
+  const pinnedToBottomRef = useRef(true)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, error } = useChat({
     api: '/api/chat',
-    body: { sessionId },
     onFinish: () => {
-      startCooldown(20)
+      startCooldown(COOLDOWN_SECONDS)
     },
     onError: () => {
       // Don't start cooldown on error — let user retry immediately
@@ -40,8 +41,17 @@ export default function ChatInterface() {
     }, 1000)
   }
 
+  function handleChatScroll() {
+    const el = scrollContainerRef.current
+    if (!el) return
+    pinnedToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollContainerRef.current
+    if (el && pinnedToBottomRef.current) {
+      el.scrollTop = el.scrollHeight
+    }
   }, [messages, isLoading])
 
   useEffect(() => {
@@ -58,6 +68,7 @@ export default function ChatInterface() {
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (cooldownRemaining > 0 || isLoading) return
+    pinnedToBottomRef.current = true
     handleSubmit(e)
   }
 
@@ -76,7 +87,11 @@ export default function ChatInterface() {
       {/* Chat area */}
       <div className="flex flex-col flex-1 min-h-0 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto chat-scroll p-5 space-y-4 min-h-0">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleChatScroll}
+          className="flex-1 overflow-y-auto chat-scroll p-5 space-y-4 min-h-0"
+        >
           {messages.length === 0 ? (
             <div className="text-center py-12 px-4">
               <h2 className="text-xl font-semibold text-slate-700 mb-2">Welcome!</h2>
@@ -106,7 +121,6 @@ export default function ChatInterface() {
             </div>
           )}
 
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Input area */}
@@ -120,7 +134,7 @@ export default function ChatInterface() {
               rows={3}
               className="flex-1 resize-none rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault()
                   if (!isSendDisabled) {
                     const form = e.currentTarget.closest('form') as HTMLFormElement

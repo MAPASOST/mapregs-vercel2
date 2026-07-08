@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Disclaimer from '@/components/Disclaimer'
 import DonationCallout from '@/components/DonationCallout'
 import ChatInterface from '@/components/ChatInterface'
+import { DONATE_URL, EEC_REGS_URL, MAP_WEBSITE_URL } from '@/lib/constants'
 
 export default function Home() {
   return (
@@ -58,7 +59,7 @@ export default function Home() {
           </p>
           <div className="flex flex-wrap gap-3 text-sm">
             <a
-              href="https://www.massafterschool.org"
+              href={MAP_WEBSITE_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-300 hover:text-blue-200 underline"
@@ -67,7 +68,7 @@ export default function Home() {
             </a>
             <span className="text-slate-500">|</span>
             <a
-              href="https://www.massafterschool.org/checkout/donate?donatePageId=659eb35dc09ff6158cd6caed"
+              href={DONATE_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-300 hover:text-blue-200 underline"
@@ -76,7 +77,7 @@ export default function Home() {
             </a>
             <span className="text-slate-500">|</span>
             <a
-              href="https://www.mass.gov/lists/eec-laws-and-regulations"
+              href={EEC_REGS_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-300 hover:text-blue-200 underline"

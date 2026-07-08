@@ -2,7 +2,12 @@ export const CLAUDE_MODEL = 'claude-sonnet-4-5-20250929'
 export const MAX_TOKENS = 4096
 export const SAMPLE_QUESTION_ROTATION_INTERVAL = 10000 // ms
 export const COOLDOWN_SECONDS = 20
-export const SESSION_TTL = 3600 // 1 hour in seconds
+
+// External links shared across components — update once, changes everywhere
+export const DONATE_URL =
+  'https://www.massafterschool.org/checkout/donate?donatePageId=659eb35dc09ff6158cd6caed'
+export const EEC_REGS_URL = 'https://www.mass.gov/lists/eec-laws-and-regulations'
+export const MAP_WEBSITE_URL = 'https://www.massafterschool.org'
 
 export const SYSTEM_PROMPT = `You are a helpful assistant specializing in Massachusetts school age program regulations.
 

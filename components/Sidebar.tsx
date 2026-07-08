@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { documents } from '@/lib/documents'
+import { documentList, getRandomQuestions } from '@/lib/documents-meta'
 import { SAMPLE_QUESTION_ROTATION_INTERVAL } from '@/lib/constants'
 
 interface SidebarProps {
@@ -10,12 +10,11 @@ interface SidebarProps {
 
 export default function Sidebar({ onQuestionClick }: SidebarProps) {
   const [sampleQuestions, setSampleQuestions] = useState<string[]>([])
-  const docList = documents.getDocumentList()
 
   useEffect(() => {
-    setSampleQuestions(documents.getRandomQuestions(5))
+    setSampleQuestions(getRandomQuestions(5))
     const interval = setInterval(() => {
-      setSampleQuestions(documents.getRandomQuestions(5))
+      setSampleQuestions(getRandomQuestions(5))
     }, SAMPLE_QUESTION_ROTATION_INTERVAL)
     return () => clearInterval(interval)
   }, [])
@@ -46,7 +45,7 @@ export default function Sidebar({ onQuestionClick }: SidebarProps) {
           Available Documents
         </h2>
         <div className="space-y-3">
-          {docList.map((doc) => (
+          {documentList.map((doc) => (
             <div key={doc.name} className="border-l-4 border-blue-500 pl-3">
               <div className="text-sm font-medium text-slate-800 leading-snug">{doc.name}</div>
               <div className="text-xs text-slate-500 mt-0.5 leading-snug">{doc.description}</div>

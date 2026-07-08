@@ -6,7 +6,10 @@ import { put, list } from '@vercel/blob'
 //
 // Pathname format: q/<timestamp>.<rand>.<base64url(question)>.txt
 const PREFIX = 'q/'
-const SCAN_CAP = 5000
+const SCAN_CAP = 20000
+// Vercel Blob pathnames max out near 950 chars; keep well under it so
+// multibyte questions (CJK, emoji) never make put() reject.
+const MAX_ENCODED_LENGTH = 600
 
 export interface RecentQuestion {
   question: string
@@ -37,9 +40,13 @@ export function isAnalyticsConfigured(): boolean {
 export async function logQuestion(question: string): Promise<void> {
   if (!isAnalyticsConfigured()) return
   try {
-    const text = question.trim().slice(0, 300)
+    let text = question.trim().slice(0, 300)
     if (!text) return
-    const encoded = Buffer.from(text).toString('base64url')
+    let encoded = Buffer.from(text).toString('base64url')
+    while (encoded.length > MAX_ENCODED_LENGTH && text.length > 10) {
+      text = text.slice(0, text.length - 20)
+      encoded = Buffer.from(text).toString('base64url')
+    }
     const rand = Math.random().toString(36).slice(2, 6)
     await put(`${PREFIX}${Date.now()}.${rand}.${encoded}.txt`, text, {
       access: 'private',
