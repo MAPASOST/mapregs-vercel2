@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { documentList } from '@/lib/documents-meta'
 
 interface MessageProps {
@@ -127,7 +128,19 @@ export default function Message({ role, content, question, showFeedback }: Messa
         ) : (
           <>
             <div className="prose-chat text-sm">
-              <ReactMarkdown>{content}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  // Wide tables scroll inside the bubble instead of overflowing it
+                  table: ({ children }) => (
+                    <div className="overflow-x-auto my-3">
+                      <table>{children}</table>
+                    </div>
+                  ),
+                }}
+              >
+                {content}
+              </ReactMarkdown>
             </div>
 
             {citations.length > 0 && (
