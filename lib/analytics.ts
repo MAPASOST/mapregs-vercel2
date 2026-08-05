@@ -235,8 +235,9 @@ const CATEGORY_RULES: Array<[string, RegExp]> = [
   ['Background Checks', /background|\bbrc\b|\bcori\b|\bsori\b|fingerprint|disqualif|suitab/],
   ['Staffing & Ratios', /ratio|staff|educator|group leader|administrator|qualificat|supervis|professional development|training|certif/],
   ['Licensing & Enforcement', /licens|enforc|\bfine|sanction|probation|revo(?:ke|cation)|suspen|deficien|appeal|exempt|complian|inspect|right to visit/],
-  ['Health & Safety', /health|safety|medicat|medical|emergen|injur|illness|infection|sanit|first aid|allerg|immuniz|abuse|neglect/],
+  // Before Health & Safety so "transportation safety" lands here
   ['Transportation', /transport|vehicle|field trip|\bbus\b|driver/],
+  ['Health & Safety', /health|safety|medicat|medical|emergen|injur|illness|infection|sanit|first aid|allerg|immuniz|abuse|neglect/],
   ['Food & Nutrition', /nutrition|\bfood\b|\bmeal|snack|feeding/],
   ['Facilities & Space', /\bspace|facilit|playground|outdoor|indoor|square (?:feet|footage)|equipment|premises/],
   ['Child Guidance & Behavior', /guidance|disciplin|behavior|prohibited|restraint|time-?out/],

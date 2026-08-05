@@ -1,4 +1,5 @@
 import { getDashboardStats, isAnalyticsConfigured, type GapReason } from '@/lib/analytics'
+import TrendChart from '@/components/TrendChart'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,8 +95,23 @@ export default async function AdminPage({
     )
   }
 
-  const { top, recent, total, capped, answered, fallbacks, thumbsUp, thumbsDown, gaps } =
-    await getDashboardStats(50, 100)
+  const {
+    top,
+    recent,
+    total,
+    capped,
+    answered,
+    fallbacks,
+    thumbsUp,
+    thumbsDown,
+    gaps,
+    citations,
+    categories,
+    daily,
+  } = await getDashboardStats(50, 100)
+
+  const categoryTotal = categories.reduce((sum, c) => sum + c.count, 0)
+  const categoryMax = Math.max(1, ...categories.map((c) => c.count))
 
   const lowConfidence = gaps.reduce((sum, g) => sum + g.count, 0)
 
@@ -170,6 +186,40 @@ export default async function AdminPage({
       </section>
 
       <section className="mb-10">
+        <h2 className="text-lg font-semibold text-slate-800 mb-3">Questions per day (last 30 days)</h2>
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+          <TrendChart daily={daily} />
+        </div>
+      </section>
+
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold text-slate-800 mb-3">Questions by topic</h2>
+        {categoryTotal === 0 ? (
+          <p className="text-slate-500 text-sm">No questions recorded yet.</p>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-3">
+            {categories.map((c) => (
+              <div key={c.category} className="flex items-center gap-3">
+                <span className="text-sm text-slate-700 w-52 shrink-0">{c.category}</span>
+                <div className="flex-1 h-2.5 bg-blue-100 rounded-r-[4px] overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 rounded-r-[4px]"
+                    style={{ width: `${(c.count / categoryMax) * 100}%` }}
+                  />
+                </div>
+                <span className="text-sm text-slate-600 w-24 text-right tabular-nums">
+                  {c.count.toLocaleString()}{' '}
+                  <span className="text-slate-400 text-xs">
+                    ({Math.round((c.count / categoryTotal) * 100)}%)
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mb-10">
         <h2 className="text-lg font-semibold text-slate-800 mb-3">Most common questions</h2>
         {top.length === 0 ? (
           <p className="text-slate-500 text-sm">
@@ -189,8 +239,49 @@ export default async function AdminPage({
                 {top.map((q, i) => (
                   <tr key={`${q.question}-${i}`} className="hover:bg-slate-50">
                     <td className="px-4 py-2 text-slate-400">{i + 1}</td>
-                    <td className="px-4 py-2 text-slate-800">{q.question}</td>
+                    <td className="px-4 py-2 text-slate-800">
+                      {q.question}
+                      {q.variants > 1 && (
+                        <span className="block text-xs text-slate-400">
+                          {q.variants} similar phrasings grouped
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right font-semibold text-blue-600">{q.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold text-slate-800 mb-1">Most-cited regulation sections</h2>
+        <p className="text-slate-500 text-sm mb-3">
+          Which sections the bot references most when answering — high counts mean high demand for
+          that part of the regulations.
+        </p>
+        {citations.length === 0 ? (
+          <p className="text-slate-500 text-sm">
+            No citations recorded yet — they are collected as new answers are generated.
+          </p>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500 text-left">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Section</th>
+                  <th className="px-4 py-2 font-medium w-24 text-right">Cited</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {citations.map((c) => (
+                  <tr key={c.section} className="hover:bg-slate-50">
+                    <td className="px-4 py-2 text-slate-800">{c.section}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-blue-600 tabular-nums">
+                      {c.count.toLocaleString()}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -39,12 +39,14 @@ export function extractCitedSections(answer: string): string[] {
   return [...found].slice(0, MAX_CITATIONS)
 }
 
-// A refusal phrase alone isn't conclusive — long, well-cited answers sometimes
-// note that one detail is unspecified. Treat it as a fallback only when the
-// answer is also short or cites nothing.
+// A refusal phrase alone isn't conclusive — substantive answers sometimes note
+// that one detail is unspecified while still citing the relevant sections.
 export function isFallbackAnswer(answer: string, citedSections: string[]): boolean {
   const text = answer.trim()
   if (text.length < 40) return true
-  const hasRefusal = FALLBACK_PATTERNS.some((re) => re.test(text))
-  return hasRefusal && (text.length < 600 || citedSections.length === 0)
+  if (!FALLBACK_PATTERNS.some((re) => re.test(text))) return false
+  // Refusal language + no citations = the bot had nothing to offer
+  if (citedSections.length === 0) return true
+  // Cited but still brief — likely "see section X, but I can't answer this"
+  return text.length < 300
 }
