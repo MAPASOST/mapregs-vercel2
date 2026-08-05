@@ -82,38 +82,44 @@ jobs:
           add_domain '{"name":"mapregs.org"}'
           add_domain '{"name":"www.mapregs.org","redirect":"mapregs.org","redirectStatusCode":308}'
 
-          # Report DNS status, and read the exact records to set straight from
+          # Report DNS status, reading the exact records to set straight from
           # Vercel's API rather than hardcoding IPs that Vercel has changed before.
-          {
-            echo "### mapregs.org domain status"
-            echo ""
-            for D in mapregs.org www.mapregs.org; do
-              CFG=$(curl -s -H "Authorization: Bearer $TOKEN" \
-                "https://api.vercel.com/v6/domains/$D/config?teamId=$VERCEL_TEAM")
-              MISCONF=$(echo "$CFG" | jq -r '.misconfigured')
-              if [ "$MISCONF" = "false" ]; then
-                echo "- **$D**: ✅ DNS is pointing at Vercel"
-              else
-                echo "- **$D**: ⏳ waiting for DNS — currently resolves elsewhere"
-                echo "$CFG" | jq -r '
-                  "    - recommended A record(s): " + ((.recommendedIPv4 // [] | flatten | join(", ")) | if . == "" then "(none returned)" else . end),
-                  "    - recommended CNAME: " + ((.recommendedCNAME // [] | flatten | join(", ")) | if . == "" then "(none returned)" else . end),
-                  "    - current records seen by Vercel: " + ((.aValues // [] | join(", ")) | if . == "" then (.cnames // [] | tostring) else . end)'
-              fi
-            done
-            echo ""
-            echo "Set the records above at the DNS provider for mapregs.org, removing the"
-            echo "GitHub Pages records (four A records at 185.199.108-111.153, and the"
-            echo "www CNAME to mapasost.github.io)."
-          } >> "$GITHUB_STEP_SUMMARY"
+          # Reporting must never fail the deploy, hence the subshell + `|| true`.
+          (
+            set +e
+            # Vercel returns recommendations as [{rank, value}] where value may be
+            # a string or an array; flatten both shapes to a plain list.
+            JQ_FLAT='def flat(x): [x[]? | if type == "object" then .value else . end]
+                       | flatten | map(tostring) | join(", ");'
+            {
+              echo "### mapregs.org domain status"
+              echo ""
+              for D in mapregs.org www.mapregs.org; do
+                CFG=$(curl -s -H "Authorization: Bearer $TOKEN" \
+                  "https://api.vercel.com/v6/domains/$D/config?teamId=$VERCEL_TEAM")
+                MISCONF=$(echo "$CFG" | jq -r '.misconfigured // "unknown"')
+                if [ "$MISCONF" = "false" ]; then
+                  echo "- **$D**: ✅ DNS is pointing at Vercel"
+                else
+                  echo "- **$D**: ⏳ waiting for DNS — still resolving elsewhere"
+                  echo "$CFG" | jq -r "$JQ_FLAT"'
+                    "    - set A record to: " + (flat(.recommendedIPv4) | if . == "" then "(n/a — use the CNAME below)" else . end),
+                    "    - or CNAME to: " + (flat(.recommendedCNAME) | if . == "" then "(n/a)" else . end)'
+                fi
+              done
+              echo ""
+              echo "Remove the old GitHub Pages records when switching: the four apex A"
+              echo "records at 185.199.108–111.153, and the www CNAME to mapasost.github.io."
+            } >> "$GITHUB_STEP_SUMMARY"
 
-          # Also echo to the job log for easy reading
-          for D in mapregs.org www.mapregs.org; do
-            echo "--- $D config ---"
-            curl -s -H "Authorization: Bearer $TOKEN" \
-              "https://api.vercel.com/v6/domains/$D/config?teamId=$VERCEL_TEAM" \
-              | jq '{misconfigured, recommendedIPv4, recommendedCNAME, aValues, cnames}'
-          done
+            echo "=== Vercel domain config (raw) ==="
+            for D in mapregs.org www.mapregs.org; do
+              echo "--- $D ---"
+              curl -s -H "Authorization: Bearer $TOKEN" \
+                "https://api.vercel.com/v6/domains/$D/config?teamId=$VERCEL_TEAM" \
+                | jq -c '{misconfigured, recommendedIPv4, recommendedCNAME, aValues, cnames}'
+            done
+          ) || true
 
       - name: Sync ANTHROPIC_API_KEY to Vercel
         run: |
