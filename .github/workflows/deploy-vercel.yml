@@ -59,6 +59,49 @@ jobs:
           print('Deployment protection disabled.' if p is None and pp is None else 'WARNING: protection still active')
           "
 
+      - name: Attach mapregs.org production domains
+        run: |
+          TOKEN="${{ secrets.VERCEL_TOKEN }}"
+          PROJECT_ID=$(jq -r .projectId .vercel/project.json)
+
+          # Idempotent: 409/conflict means the domain is already attached.
+          # www redirects to the apex so there is one canonical URL.
+          add_domain() {
+            CODE=$(curl -s -o /tmp/dom.json -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+              -d "$1" "https://api.vercel.com/v10/projects/$PROJECT_ID/domains?teamId=$VERCEL_TEAM")
+            NAME=$(echo "$1" | jq -r .name)
+            if [ "$CODE" = "200" ] || [ "$CODE" = "201" ]; then
+              echo "$NAME: attached"
+            elif jq -e '.error.code == "domain_already_exists" or (.error.message // "" | test("already"))' /tmp/dom.json > /dev/null 2>&1; then
+              echo "$NAME: already attached"
+            else
+              echo "::warning::$NAME: HTTP $CODE $(jq -r '.error.message // empty' /tmp/dom.json)"
+            fi
+          }
+          add_domain '{"name":"mapregs.org"}'
+          add_domain '{"name":"www.mapregs.org","redirect":"mapregs.org","redirectStatusCode":308}'
+
+          # Report DNS status so the run summary shows whether the domain is live
+          {
+            echo "### mapregs.org domain status"
+            echo ""
+            for D in mapregs.org www.mapregs.org; do
+              CFG=$(curl -s -H "Authorization: Bearer $TOKEN" \
+                "https://api.vercel.com/v6/domains/$D/config?teamId=$VERCEL_TEAM")
+              MISCONF=$(echo "$CFG" | jq -r '.misconfigured')
+              if [ "$MISCONF" = "false" ]; then
+                echo "- **$D**: ✅ DNS is pointing at Vercel"
+              else
+                echo "- **$D**: ⏳ waiting for DNS (still pointing elsewhere)"
+              fi
+            done
+            echo ""
+            echo "If a domain shows ⏳, set these records at the DNS provider:"
+            echo '- Apex `mapregs.org`: **A record → 76.76.21.21** (delete the four GitHub Pages 185.199.x.x A records)'
+            echo '- `www.mapregs.org`: **CNAME → cname.vercel-dns.com** (replace the mapasost.github.io CNAME)'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Sync ANTHROPIC_API_KEY to Vercel
         run: |
           # --force upserts atomically; the old rm-then-add left a window
