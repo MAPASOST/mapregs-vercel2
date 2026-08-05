@@ -41,13 +41,41 @@ export default async function AdminPage({
     )
   }
 
-  if (searchParams.key !== adminKey) {
+  const providedKey = searchParams.key?.trim()
+
+  if (providedKey !== adminKey) {
     return (
       <Shell>
-        <div className="bg-red-50 border border-red-300 rounded-xl p-5 text-red-800 text-sm">
-          Unauthorized. Append <code className="bg-red-100 px-1 rounded">?key=YOUR_ADMIN_KEY</code> to
-          the URL. The key is in the Vercel dashboard under the mapregs project → Settings →
-          Environment Variables → ADMIN_KEY.
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm max-w-md">
+          <h2 className="text-lg font-semibold text-slate-800 mb-1">Admin login</h2>
+          <p className="text-slate-500 text-sm mb-4">
+            Enter the admin key to view question analytics.
+          </p>
+          {providedKey && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-700 text-sm mb-4">
+              That key is incorrect.
+            </div>
+          )}
+          <form method="GET" action="/admin" className="flex gap-2">
+            <input
+              type="password"
+              name="key"
+              required
+              autoFocus
+              placeholder="Admin key"
+              className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2"
+            >
+              Sign in
+            </button>
+          </form>
+          <p className="text-slate-400 text-xs mt-4">
+            The key is the <code className="bg-slate-100 px-1 rounded">ADMIN_KEY</code> environment
+            variable: Vercel dashboard → mapregs project → Settings → Environment Variables.
+          </p>
         </div>
       </Shell>
     )
