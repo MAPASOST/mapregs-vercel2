@@ -82,7 +82,8 @@ jobs:
           add_domain '{"name":"mapregs.org"}'
           add_domain '{"name":"www.mapregs.org","redirect":"mapregs.org","redirectStatusCode":308}'
 
-          # Report DNS status so the run summary shows whether the domain is live
+          # Report DNS status, and read the exact records to set straight from
+          # Vercel's API rather than hardcoding IPs that Vercel has changed before.
           {
             echo "### mapregs.org domain status"
             echo ""
@@ -93,14 +94,26 @@ jobs:
               if [ "$MISCONF" = "false" ]; then
                 echo "- **$D**: ✅ DNS is pointing at Vercel"
               else
-                echo "- **$D**: ⏳ waiting for DNS (still pointing elsewhere)"
+                echo "- **$D**: ⏳ waiting for DNS — currently resolves elsewhere"
+                echo "$CFG" | jq -r '
+                  "    - recommended A record(s): " + ((.recommendedIPv4 // [] | flatten | join(", ")) | if . == "" then "(none returned)" else . end),
+                  "    - recommended CNAME: " + ((.recommendedCNAME // [] | flatten | join(", ")) | if . == "" then "(none returned)" else . end),
+                  "    - current records seen by Vercel: " + ((.aValues // [] | join(", ")) | if . == "" then (.cnames // [] | tostring) else . end)'
               fi
             done
             echo ""
-            echo "If a domain shows ⏳, set these records at the DNS provider:"
-            echo '- Apex `mapregs.org`: **A record → 76.76.21.21** (delete the four GitHub Pages 185.199.x.x A records)'
-            echo '- `www.mapregs.org`: **CNAME → cname.vercel-dns.com** (replace the mapasost.github.io CNAME)'
+            echo "Set the records above at the DNS provider for mapregs.org, removing the"
+            echo "GitHub Pages records (four A records at 185.199.108-111.153, and the"
+            echo "www CNAME to mapasost.github.io)."
           } >> "$GITHUB_STEP_SUMMARY"
+
+          # Also echo to the job log for easy reading
+          for D in mapregs.org www.mapregs.org; do
+            echo "--- $D config ---"
+            curl -s -H "Authorization: Bearer $TOKEN" \
+              "https://api.vercel.com/v6/domains/$D/config?teamId=$VERCEL_TEAM" \
+              | jq '{misconfigured, recommendedIPv4, recommendedCNAME, aValues, cnames}'
+          done
 
       - name: Sync ANTHROPIC_API_KEY to Vercel
         run: |
