@@ -104,8 +104,20 @@ export default function ChatInterface() {
               </p>
             </div>
           ) : (
-            messages.map((m) => (
-              <Message key={m.id} role={m.role as 'user' | 'assistant'} content={m.content} />
+            messages.map((m, i) => (
+              <Message
+                key={m.id}
+                role={m.role as 'user' | 'assistant'}
+                content={m.content}
+                question={
+                  m.role === 'assistant' && messages[i - 1]?.role === 'user'
+                    ? messages[i - 1].content
+                    : undefined
+                }
+                showFeedback={
+                  m.role === 'assistant' && !(isLoading && i === messages.length - 1)
+                }
+              />
             ))
           )}
 

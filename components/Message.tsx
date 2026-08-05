@@ -1,9 +1,14 @@
+import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { documentList } from '@/lib/documents-meta'
 
 interface MessageProps {
   role: 'user' | 'assistant'
   content: string
+  // The user question this assistant message answered — enables feedback
+  question?: string
+  // Hidden while the answer is still streaming
+  showFeedback?: boolean
 }
 
 interface Citation {
@@ -43,7 +48,52 @@ function extractCitations(content: string): Citation[] {
     .slice(0, 12)
 }
 
-export default function Message({ role, content }: MessageProps) {
+function FeedbackButtons({ question }: { question: string }) {
+  const [vote, setVote] = useState<'up' | 'down' | null>(null)
+
+  function sendVote(next: 'up' | 'down') {
+    if (vote) return
+    setVote(next)
+    // Fire-and-forget: feedback must never interrupt reading the answer
+    void fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vote: next, question }),
+    }).catch(() => {})
+  }
+
+  return (
+    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center gap-2">
+      {vote ? (
+        <span className="text-xs text-slate-400">
+          {vote === 'up' ? 'Thanks for the feedback!' : 'Thanks — we’ll use this to improve answers.'}
+        </span>
+      ) : (
+        <>
+          <span className="text-xs text-slate-400">Was this helpful?</span>
+          <button
+            type="button"
+            onClick={() => sendVote('up')}
+            aria-label="Yes, this answer was helpful"
+            className="text-sm px-2 py-0.5 rounded-md hover:bg-slate-100 transition-colors"
+          >
+            👍
+          </button>
+          <button
+            type="button"
+            onClick={() => sendVote('down')}
+            aria-label="No, this answer was not helpful"
+            className="text-sm px-2 py-0.5 rounded-md hover:bg-slate-100 transition-colors"
+          >
+            👎
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+export default function Message({ role, content, question, showFeedback }: MessageProps) {
   const isUser = role === 'user'
   const citations = isUser ? [] : extractCitations(content)
 
@@ -93,6 +143,8 @@ export default function Message({ role, content }: MessageProps) {
                 </div>
               </div>
             )}
+
+            {showFeedback && question && <FeedbackButtons question={question} />}
           </>
         )}
       </div>

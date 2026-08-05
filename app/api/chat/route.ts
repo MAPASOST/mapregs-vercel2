@@ -1,7 +1,8 @@
 import { streamText } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { NextResponse, type NextRequest } from 'next/server'
-import { logQuestion } from '@/lib/analytics'
+import { logAnswer, logQuestion } from '@/lib/analytics'
+import { extractCitedSections, isFallbackAnswer } from '@/lib/answer-analysis'
 import { documents } from '@/lib/documents'
 import { isRateLimited } from '@/lib/rate-limit'
 import { CLAUDE_MODEL, MAX_TOKENS, SYSTEM_PROMPT } from '@/lib/constants'
@@ -61,6 +62,16 @@ Now answer the user's question based ONLY on the information in these documents.
       // The client sends the full conversation on every request
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       maxTokens: MAX_TOKENS,
+      // Record whether this question actually got answered and which sections
+      // were cited. Fire-and-forget like logQuestion — never blocks the stream.
+      onFinish: ({ text }) => {
+        const citedSections = extractCitedSections(text)
+        void logAnswer({
+          question: latestUserMessage.content,
+          fallback: isFallbackAnswer(text, citedSections),
+          citedSections,
+        })
+      },
     })
 
     return result.toDataStreamResponse({

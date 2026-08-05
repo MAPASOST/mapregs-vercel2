@@ -1,4 +1,4 @@
-import { getQuestionStats, isAnalyticsConfigured } from '@/lib/analytics'
+import { getDashboardStats, isAnalyticsConfigured, type GapReason } from '@/lib/analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,11 +94,19 @@ export default async function AdminPage({
     )
   }
 
-  const { top, recent, total, capped } = await getQuestionStats(50, 100)
+  const { top, recent, total, capped, answered, fallbacks, thumbsUp, thumbsDown, gaps } =
+    await getDashboardStats(50, 100)
+
+  const lowConfidence = gaps.reduce((sum, g) => sum + g.count, 0)
+
+  const reasonBadge: Record<GapReason, { label: string; className: string }> = {
+    'no-answer': { label: 'No answer', className: 'bg-red-100 text-red-700' },
+    'thumbs-down': { label: '👎 Thumbs down', className: 'bg-amber-100 text-amber-800' },
+  }
 
   return (
     <Shell>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <div className="text-3xl font-bold text-blue-600">
             {total.toLocaleString()}
@@ -107,14 +115,59 @@ export default async function AdminPage({
           <div className="text-sm text-slate-500 mt-1">Total questions asked</div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-          <div className="text-3xl font-bold text-violet-600">{top.length.toLocaleString()}</div>
-          <div className="text-sm text-slate-500 mt-1">Distinct questions (top 50 shown)</div>
+          <div className="text-3xl font-bold text-emerald-600">{answered.toLocaleString()}</div>
+          <div className="text-sm text-slate-500 mt-1">Answered</div>
+        </div>
+        <div className="bg-white border border-red-200 rounded-xl p-5 shadow-sm">
+          <div className="text-3xl font-bold text-red-600">{lowConfidence.toLocaleString()}</div>
+          <div className="text-sm text-slate-500 mt-1">Low-confidence / no answer</div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-          <div className="text-3xl font-bold text-emerald-600">{recent.length.toLocaleString()}</div>
-          <div className="text-sm text-slate-500 mt-1">Recent questions shown</div>
+          <div className="text-3xl font-bold text-slate-700">
+            <span className="text-emerald-600">👍 {thumbsUp.toLocaleString()}</span>{' '}
+            <span className="text-red-500">👎 {thumbsDown.toLocaleString()}</span>
+          </div>
+          <div className="text-sm text-slate-500 mt-1">Reader feedback</div>
         </div>
       </div>
+
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold text-slate-800 mb-1">
+          🚨 Knowledge gaps — questions the bot couldn&apos;t answer well
+        </h2>
+        <p className="text-slate-500 text-sm mb-3">
+          Questions that hit a fallback/&quot;I don&apos;t know&quot; response ({fallbacks.toLocaleString()} total)
+          or got a thumbs-down from a reader. Use this list to find missing knowledge-base coverage.
+        </p>
+        {gaps.length === 0 ? (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 text-slate-500 text-sm shadow-sm">
+            Nothing here yet — entries appear when an answer falls back to &quot;I don&apos;t
+            know&quot; or a reader clicks 👎 under an answer.
+          </div>
+        ) : (
+          <div className="bg-white border border-red-200 rounded-xl shadow-sm divide-y divide-slate-100">
+            {gaps.map((g, i) => (
+              <div key={`${g.ts}-${i}`} className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="text-slate-800 text-sm flex-1 min-w-[200px]">{g.question}</span>
+                {g.reasons.map((r) => (
+                  <span
+                    key={r}
+                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${reasonBadge[r].className}`}
+                  >
+                    {reasonBadge[r].label}
+                  </span>
+                ))}
+                {g.count > 1 && (
+                  <span className="text-xs font-semibold text-slate-500">×{g.count}</span>
+                )}
+                <span className="text-slate-400 text-xs whitespace-nowrap">
+                  {new Date(g.ts).toLocaleString('en-US', { timeZone: 'America/New_York' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="mb-10">
         <h2 className="text-lg font-semibold text-slate-800 mb-3">Most common questions</h2>
