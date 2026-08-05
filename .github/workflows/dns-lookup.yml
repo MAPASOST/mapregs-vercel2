@@ -4,6 +4,9 @@ name: DNS lookup (mapregs.org)
 # Safe to delete once the domain cutover is finished.
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/dns-lookup.yml'
 
 jobs:
   lookup:
