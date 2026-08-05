@@ -1,0 +1,43 @@
+name: DNS lookup (mapregs.org)
+
+# Diagnostic helper: reports who hosts DNS and who the registrar is.
+# Safe to delete once the domain cutover is finished.
+on:
+  workflow_dispatch:
+
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Look up nameservers and registrar
+        run: |
+          sudo apt-get install -y -qq dnsutils whois > /dev/null 2>&1 || true
+          {
+            echo "## Who controls mapregs.org"
+            echo ""
+            echo "### Nameservers (this is where the DNS records live)"
+            echo '```'
+            dig +short NS mapregs.org
+            echo '```'
+            echo ""
+            echo "### Registrar (where the domain was bought / is renewed)"
+            echo '```'
+            whois mapregs.org 2>/dev/null | grep -iE '^\s*(registrar:|registrar url:|registrar abuse|reseller:|creation date:|registry expiry date:|name server:)' | sed 's/^[[:space:]]*//' | sort -u
+            echo '```'
+            echo ""
+            echo "### Current records"
+            echo '```'
+            echo "apex A:   $(dig +short A mapregs.org | tr '\n' ' ')"
+            echo "www:      $(dig +short CNAME www.mapregs.org | tr '\n' ' ')$(dig +short A www.mapregs.org | tr '\n' ' ')"
+            echo "MX:       $(dig +short MX mapregs.org | tr '\n' ' ')"
+            echo '```'
+            echo ""
+            echo "_MX shown so email routing is preserved when the web records change._"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "===== NAMESERVERS ====="
+          dig +short NS mapregs.org
+          echo "===== REGISTRAR ====="
+          whois mapregs.org 2>/dev/null | grep -iE '^\s*(registrar:|registrar url:|reseller:|creation date:|registry expiry date:|name server:)' | sed 's/^[[:space:]]*//' | sort -u
+          echo "===== MX (preserve email) ====="
+          dig +short MX mapregs.org
